@@ -20,9 +20,9 @@ def check(csv_path: Path, image_names: set[str]):
 
     with csv_path.open("r", newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        required_fields = {"filename", "type", "tier"}
+        required_fields = {"filename", "tier"}
         if not required_fields.issubset(set(reader.fieldnames or [])):
-            return False, "CSV header must include filename,type,tier"
+            return False, "CSV header must include filename,tier"
 
         rows = list(reader)
 
@@ -32,13 +32,10 @@ def check(csv_path: Path, image_names: set[str]):
     csv_names = set()
     for idx, row in enumerate(rows, start=2):
         filename = (row.get("filename") or "").strip()
-        image_type = (row.get("type") or "").strip()
         tier = (row.get("tier") or "").strip()
 
         if not filename:
             return False, f"row {idx}: filename is empty"
-        if not image_type:
-            return False, f"row {idx}: type is empty"
         if not tier:
             return False, f"row {idx}: tier is empty"
 
