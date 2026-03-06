@@ -1,0 +1,83 @@
+name: Wallpaper Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-metadata-csv:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync metadata CSV
+        run: |
+          python3 scripts/sync_csv.py --images-dir images --csv-path metadata/wallpapers.csv
+
+      - name: Commit CSV changes
+        run: |
+          if git diff --quiet -- metadata/wallpapers.csv; then
+            echo "No CSV changes"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add metadata/wallpapers.csv
+          git commit -m "chore: sync wallpaper metadata csv"
+          git push
+
+  release-bundle:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    needs: sync-metadata-csv
+    steps:
+      - name: Checkout latest
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Ensure latest remote state
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
+
+      - name: Check release readiness
+        id: check
+        run: |
+          python3 scripts/check_release_ready.py --images-dir images --csv-path metadata/wallpapers.csv
+
+      - name: Stop if metadata is incomplete
+        if: steps.check.outputs.ready != 'true'
+        run: |
+          echo "Skip release: ${{ steps.check.outputs.reason }}"
+
+      - name: Build zip bundle
+        if: steps.check.outputs.ready == 'true'
+        id: bundle
+        run: |
+          mkdir -p dist
+          bundle_name="wallpaper-bundle-${GITHUB_SHA::7}.zip"
+          (cd . && zip -r "dist/${bundle_name}" images metadata/wallpapers.csv)
+          tag="wallpapers-$(date -u +'%Y%m%d-%H%M%S')-${GITHUB_SHA::7}"
+          echo "bundle=dist/${bundle_name}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        if: steps.check.outputs.ready == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.bundle.outputs.tag }}
+          name: ${{ steps.bundle.outputs.tag }}
+          files: ${{ steps.bundle.outputs.bundle }}
+          generate_release_notes: true
