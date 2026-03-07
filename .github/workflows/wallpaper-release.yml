@@ -66,9 +66,56 @@ jobs:
         if: steps.check.outputs.ready == 'true'
         id: bundle
         run: |
+          sudo apt-get update
+          sudo apt-get install -y webp
+
           mkdir -p dist
+          bundle_root="$(mktemp -d)"
+          export BUNDLE_ROOT="${bundle_root}"
+          mkdir -p "${bundle_root}/images" "${bundle_root}/metadata"
+
+          while IFS= read -r -d '' src; do
+            rel="${src#images/}"
+            rel_dir="$(dirname "${rel}")"
+            filename="$(basename "${rel}")"
+            stem="${filename%.*}"
+            ext="${filename##*.}"
+            ext_lc="$(echo "${ext}" | tr '[:upper:]' '[:lower:]')"
+            mkdir -p "${bundle_root}/images/${rel_dir}"
+
+            if [ "${ext_lc}" = "jpg" ] || [ "${ext_lc}" = "jpeg" ] || [ "${ext_lc}" = "png" ]; then
+              cwebp -quiet -q 82 "${src}" -o "${bundle_root}/images/${rel_dir}/${stem}.webp"
+            else
+              cp "${src}" "${bundle_root}/images/${rel}"
+            fi
+          done < <(find images -type f -print0)
+
+          python3 - <<'PY'
+          import csv
+          import os
+          from pathlib import Path
+
+          csv_path = Path("metadata/wallpapers.csv")
+          out_path = Path(os.environ["BUNDLE_ROOT"]) / "metadata" / "wallpapers.csv"
+          rows = []
+          with csv_path.open("r", newline="", encoding="utf-8") as f:
+              reader = csv.DictReader(f)
+              fieldnames = reader.fieldnames or ["filename", "tier"]
+              for row in reader:
+                  filename = (row.get("filename") or "").strip()
+                  stem, dot, ext = filename.rpartition(".")
+                  if dot and ext.lower() in {"jpg", "jpeg", "png"}:
+                      row["filename"] = f"{stem}.webp"
+                  rows.append(row)
+
+          with out_path.open("w", newline="", encoding="utf-8") as f:
+              writer = csv.DictWriter(f, fieldnames=fieldnames)
+              writer.writeheader()
+              writer.writerows(rows)
+          PY
+
           bundle_name="wallpaper-bundle-${GITHUB_SHA::7}.zip"
-          (cd . && zip -r "dist/${bundle_name}" images metadata/wallpapers.csv)
+          (cd "${bundle_root}" && zip -r "${GITHUB_WORKSPACE}/dist/${bundle_name}" images metadata/wallpapers.csv)
           tag="wallpapers-$(date -u +'%Y%m%d-%H%M%S')-${GITHUB_SHA::7}"
           echo "bundle=dist/${bundle_name}" >> "$GITHUB_OUTPUT"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"

@@ -7,7 +7,7 @@
 1. 画像を追加して push
 2. Actions が `metadata/wallpapers.csv` を作成/更新（`tier` は空欄）
 3. `tier` を埋めて再度 push
-4. Actions が検証後、画像 + CSV を同梱した zip を GitHub Release に作成
+4. Actions が検証後、`jpg/jpeg/png` を `webp` に変換した画像 + CSV を同梱した zip を GitHub Release に作成
 
 ## ディレクトリ
 
@@ -21,3 +21,4 @@
 
 - `filename` は画像ファイル名と一致させてください。
 - `tier` が1つでも空欄なら、Release作成はスキップされます。
+- Release zip 内では `jpg/jpeg/png` の `filename` は自動で `.webp` に置き換えられます（リポジトリ内の元画像は変更されません）。
