@@ -20,6 +20,7 @@ def read_existing(csv_path: Path):
             existing[filename] = {
                 "filename": filename,
                 "tier": (row.get("tier") or "").strip(),
+                "Type": (row.get("Type") or "").strip(),
             }
     return existing
 
@@ -36,11 +37,12 @@ def collect_images(images_dir: Path):
 
 
 def render_csv(rows):
-    lines = ["filename,tier"]
+    lines = ["filename,tier,Type"]
     for row in rows:
         filename = row["filename"].replace(",", "")
         tier = row["tier"].replace(",", "")
-        lines.append(f"{filename},{tier}")
+        image_type = row["Type"].replace(",", "")
+        lines.append(f"{filename},{tier},{image_type}")
     return "\n".join(lines) + "\n"
 
 
@@ -58,7 +60,7 @@ def main():
 
     rows = []
     for image_name in image_names:
-        row = existing.get(image_name, {"filename": image_name, "tier": ""})
+        row = existing.get(image_name, {"filename": image_name, "tier": "", "Type": ""})
         rows.append(row)
 
     output = render_csv(rows)
